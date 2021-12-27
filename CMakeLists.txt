@@ -7,3 +7,4 @@ set(CMAKE_CXX_STANDARD 17)
 add_library(ppm ppm.cxx matrix.cxx)
 
 add_executable(generate_patterns generate_patterns.cxx ppm)
+add_executable(generate_texture generate_texture.cxx ppm)

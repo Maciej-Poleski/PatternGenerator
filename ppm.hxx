@@ -1,5 +1,9 @@
+#ifndef PPM_HXX
+#define PPM_HXX
+
 #include <cstring>
 #include <fcntl.h>
+#include <filesystem>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -20,6 +24,9 @@ struct bitmap {
   static std::size_t blob_size(std::size_t width, std::size_t height);
   static void convert(std::byte *destination,
                       const matrix<std::uint8_t> &matrix);
+
+  static pixel get_pixel(const std::byte *blob, std::size_t width,
+                         std::size_t height, std::size_t x, std::size_t y);
 };
 
 struct graymap {
@@ -30,19 +37,29 @@ struct graymap {
   static std::size_t blob_size(std::size_t width, std::size_t height);
   static void convert(std::byte *destination,
                       const matrix<std::uint8_t> &matrix);
+
+  static pixel get_pixel(const std::byte *blob, std::size_t width,
+                         std::size_t height, std::size_t x, std::size_t y);
 };
 
 template <class Format> class image {
 public:
+  image(const image &) = delete;
+  image(image &&other);
+
+  image &operator=(image &&other);
+
   ~image();
 
   std::size_t width() const;
   std::size_t height() const;
 
+  typename Format::pixel operator()(std::size_t x, std::size_t y) const;
+
   static std::optional<image> create(const std::string &name,
                                      const matrix<std::uint8_t> &matrix);
 
-  static std::optional<image> open(const std::string &name);
+  static std::optional<image> open(const std::filesystem::path &file);
 
 private:
   explicit image(std::size_t width, std::size_t height, std::size_t blob_offset,
@@ -58,17 +75,48 @@ private:
   std::byte *_data;
 };
 
+template <typename Format>
+image<Format>::image(image &&other)
+    : _width(other._width), _height(other._height),
+      _blob_offset(other._blob_offset), _data(other._data) {
+  other._data = nullptr;
+}
+
+template <typename Format>
+image<Format> &image<Format>::operator=(image<Format> &&other) {
+  _width = other._width;
+  _height = other._height;
+  _blob_offset = other._blob_offset;
+  _data = other._data;
+  other._data = nullptr;
+  return *this;
+}
+
 template <typename Format> image<Format>::~image() {
-  if (munmap(_data, data_size()) < 0) {
+  if (_data != nullptr && munmap(_data, data_size()) < 0) {
     perror("~image");
   }
+}
+
+template <class Format> std::size_t image<Format>::width() const {
+  return _width;
+}
+
+template <class Format> std::size_t image<Format>::height() const {
+  return _height;
+}
+
+template <class Format>
+typename Format::pixel image<Format>::operator()(std::size_t x,
+                                                 std::size_t y) const {
+  return Format::get_pixel(_data + _blob_offset, _width, _height, x, y);
 }
 
 template <class Format>
 std::optional<image<Format>>
 image<Format>::create(const std::string &name,
                       const matrix<std::uint8_t> &matrix) {
-  int fd = ::open((name + ".ppm").c_str(), O_CREAT | O_RDWR | O_TRUNC,
+  int fd = ::open(name.c_str(), O_CREAT | O_RDWR | O_TRUNC,
                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   if (fd < 0) {
     perror("creat");
@@ -102,8 +150,9 @@ image<Format>::create(const std::string &name,
 }
 
 template <class Format>
-std::optional<image<Format>> image<Format>::open(const std::string &name) {
-  int fd = ::open(name.c_str(), O_RDONLY);
+std::optional<image<Format>>
+image<Format>::open(const std::filesystem::path &file) {
+  int fd = ::open(file.c_str(), O_RDONLY);
   if (fd < 0) {
     perror("image::open");
     return std::nullopt;
@@ -120,11 +169,7 @@ std::optional<image<Format>> image<Format>::open(const std::string &name) {
     return std::nullopt;
   }
   std::size_t width, height;
-  sscanf(data,
-         ("P" + std::to_string(Format::format) + " %uz %uz " +
-          std::to_string(Format::color_depth) + " ")
-             .c_str(),
-         &width, &height);
+  sscanf(reinterpret_cast<char *>(data + 3), "%zu%zu", &width, &height);
   return image(width, height, stat.st_size - Format::blob_size(width, height),
                data);
 }
@@ -134,3 +179,5 @@ template <class Format> std::size_t image<Format>::data_size() const {
 }
 
 } // namespace ppm
+
+#endif

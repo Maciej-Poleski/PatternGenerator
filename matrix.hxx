@@ -1,3 +1,6 @@
+#ifndef MATRIX_HXX
+#define MATRIX_HXX
+
 #include <vector>
 
 template <typename T> class matrix {
@@ -73,3 +76,4 @@ template <typename T> std::size_t popcount(const matrix<T> &matrix) {
   return result;
 }
 
+#endif
