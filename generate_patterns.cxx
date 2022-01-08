@@ -119,7 +119,7 @@ void generate_patterns(std::size_t width, std::size_t height, double fill_ratio,
       if (biggest_pattern < count) {
         //                 bitmap.erase(region.pattern, region.anchor_left,
         //                 region.anchor_top);
-        auto maybe_ppm = ppm::image<ppm::bitmap>::create(std::to_string(count),
+        auto maybe_ppm = ppm::image<ppm::bitmap>::create(std::to_string(count)+".ppm",
                                                          region.pattern);
         biggest_pattern = count;
         std::cout << "Generated pattern: " << count << "\n";
